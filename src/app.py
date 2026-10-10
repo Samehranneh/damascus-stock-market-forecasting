@@ -3,7 +3,7 @@
 GET /api/companies            -> list of available companies
 GET /api/predict/<company>    -> forecast, test scores, trend and recommendation
 
-An XGBoost model is trained on request for the chosen company. The 30-day vs
+A Random Forest model is trained on request for the chosen company. The 30-day vs
 60-day moving average gives the trend direction, which is passed as a prompt to
 GPT-Neo to generate a short plain-language recommendation. GPT-Neo is optional:
 set ENABLE_LLM=0 to skip it (it is a 2.7B-parameter download).
@@ -17,11 +17,13 @@ from pathlib import Path
 
 from flask import Flask, jsonify
 from flask_cors import CORS
+from sklearn.ensemble import RandomForestRegressor
 from sklearn.metrics import mean_absolute_error, r2_score
 from sklearn.preprocessing import MinMaxScaler
-from xgboost import XGBRegressor
 
-from data import FEATURES, chronological_split, list_companies, load_prices, make_supervised
+import pandas as pd
+
+from data import chronological_split, list_companies, load_prices, make_supervised
 
 DATA_DIR = Path(os.environ.get("DSE_DATA_DIR", Path(__file__).resolve().parent.parent / "data"))
 ENABLE_LLM = os.environ.get("ENABLE_LLM", "1") == "1"
@@ -72,15 +74,22 @@ def predict(company: str):
         return jsonify(status="error", message="Unknown company"), 404
 
     df = load_prices(path)
-    X, y = make_supervised(df)
+    X, y, close_t = make_supervised(df)
     (X_tr, y_tr), _, (X_te, y_te) = chronological_split(X, y)
     scaler = MinMaxScaler().fit(X_tr)
-    model = XGBRegressor(objective="reg:squarederror", n_estimators=100, random_state=42)
+    # Random Forest was the most reliable model across companies (see README)
+    model = RandomForestRegressor(n_estimators=200, min_samples_leaf=20, random_state=42)
     model.fit(scaler.transform(X_tr), y_tr)
-    test_pred = model.predict(scaler.transform(X_te))
 
-    latest = df[FEATURES].iloc[[-1]]
-    next_close = float(model.predict(scaler.transform(latest))[0])
+    c_te = close_t.loc[X_te.index]
+    actual = c_te * (1 + y_te)
+    test_pred = c_te * (1 + model.predict(scaler.transform(X_te)))
+    naive_mae = float(mean_absolute_error(actual, c_te))
+
+    # the latest row has features but no target yet
+    latest_X, _, _ = make_supervised(pd.concat([df, df.iloc[[-1]]]))
+    next_ret = float(model.predict(scaler.transform(latest_X.iloc[[-1]]))[0])
+    next_close = float(df["close"].iloc[-1]) * (1 + next_ret)
 
     trend = "upward" if df["close"].tail(30).mean() > df["close"].tail(60).mean() else "downward"
     return jsonify(
@@ -89,8 +98,9 @@ def predict(company: str):
         last_date=str(df.index[-1].date()),
         last_close=float(df["close"].iloc[-1]),
         next_close_forecast=round(next_close, 2),
-        test_r2=round(float(r2_score(y_te, test_pred)), 4),
-        test_mae=round(float(mean_absolute_error(y_te, test_pred)), 2),
+        test_r2=round(float(r2_score(actual, test_pred)), 4),
+        test_mae=round(float(mean_absolute_error(actual, test_pred)), 2),
+        naive_test_mae=round(naive_mae, 2),
         trend=trend,
         recommendation=recommendation(trend),
     )

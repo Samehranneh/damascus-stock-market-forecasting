@@ -57,51 +57,58 @@ def build_lstm(n_features: int):
 
 def run(csv_path: str, out_dir: str = "results", use_lstm: bool = True) -> pd.DataFrame:
     df = load_prices(csv_path)
-    X, y = make_supervised(df)
+    X, y, close_t = make_supervised(df)
     (X_tr, y_tr), (X_va, y_va), (X_te, y_te) = chronological_split(X, y)
+    c_va, c_te = close_t.loc[X_va.index], close_t.loc[X_te.index]
+    # evaluate everything on the price scale: next-day close
+    p_va, p_te = c_va * (1 + y_va), c_te * (1 + y_te)
 
     scaler = MinMaxScaler().fit(X_tr)  # fit on training data only
     Xs_tr, Xs_va, Xs_te = (scaler.transform(a) for a in (X_tr, X_va, X_te))
+    to_price = lambda c, r: c.values * (1 + r)
 
     preds: dict[str, tuple] = {}
 
     # Baseline: tomorrow's close = today's close
-    preds["Naive (last close)"] = (X_va["close"].values, X_te["close"].values)
+    preds["Naive (last close)"] = (c_va.values, c_te.values)
 
     regressors = {
-        "XGBoost": XGBRegressor(objective="reg:squarederror", n_estimators=100, random_state=42),
-        "Random Forest": RandomForestRegressor(n_estimators=100, random_state=42),
-        "SVR": SVR(kernel="rbf"),
+        "XGBoost": XGBRegressor(objective="reg:squarederror", n_estimators=200,
+                                max_depth=3, learning_rate=0.05, random_state=42),
+        "Random Forest": RandomForestRegressor(n_estimators=200, min_samples_leaf=20, random_state=42),
+        "SVR": SVR(kernel="rbf", epsilon=0.001),
     }
     if CatBoostRegressor is not None:
         regressors["CatBoost"] = CatBoostRegressor(
-            iterations=100, learning_rate=0.1, depth=6, loss_function="RMSE", verbose=0
+            iterations=200, learning_rate=0.05, depth=4, loss_function="RMSE",
+            verbose=0, allow_writing_files=False
         )
     for name, model in regressors.items():
         model.fit(Xs_tr, y_tr)
-        preds[name] = (model.predict(Xs_va), model.predict(Xs_te))
+        preds[name] = (to_price(c_va, model.predict(Xs_va)), to_price(c_te, model.predict(Xs_te)))
 
-    # Holt-Winters on the closing-price series itself
+    # Holt-Winters works on the price series itself, forecasting the whole
+    # validation + test period from the end of training
     hw = ExponentialSmoothing(
-        y_tr.values, trend="add", seasonal="add", seasonal_periods=12
+        df["close"].loc[:X_tr.index[-1]].values, trend="add", seasonal="add", seasonal_periods=12
     ).fit()
     hw_fc = hw.forecast(len(y_va) + len(y_te))
-    preds["Holt-Winters"] = (hw_fc[: len(y_va)], hw_fc[len(y_va):])
+    preds["Holt-Winters (multi-step)"] = (hw_fc[: len(y_va)], hw_fc[len(y_va):])
 
     if use_lstm:
         try:
             lstm = build_lstm(Xs_tr.shape[1])
             r = lambda a: a.reshape(a.shape[0], 1, a.shape[1])
             lstm.fit(r(Xs_tr), y_tr.values, epochs=50, batch_size=32, verbose=0)
-            preds["LSTM"] = (lstm.predict(r(Xs_va), verbose=0).ravel(),
-                             lstm.predict(r(Xs_te), verbose=0).ravel())
+            preds["LSTM"] = (to_price(c_va, lstm.predict(r(Xs_va), verbose=0).ravel()),
+                             to_price(c_te, lstm.predict(r(Xs_te), verbose=0).ravel()))
         except ImportError:
             print("TensorFlow not installed, skipping LSTM.")
 
     rows = []
     for name, (pv, pt) in preds.items():
-        rows.append({"model": name, "split": "validation", **metrics(y_va, pv)})
-        rows.append({"model": name, "split": "test", **metrics(y_te, pt)})
+        rows.append({"model": name, "split": "validation", **metrics(p_va, pv)})
+        rows.append({"model": name, "split": "test", **metrics(p_te, pt)})
     table = pd.DataFrame(rows)
 
     out = Path(out_dir)
@@ -111,7 +118,7 @@ def run(csv_path: str, out_dir: str = "results", use_lstm: bool = True) -> pd.Da
 
     test = table[table.split == "test"].sort_values("RMSE")
     fig, ax = plt.subplots(figsize=(9, 4.5))
-    ax.barh(test.model, test.RMSE, color="#4B5A2A")
+    ax.barh(test.model, test.RMSE, color=["#8E9A5E" if m.startswith("Naive") else "#4B5A2A" for m in test.model])
     ax.invert_yaxis()
     ax.set_xlabel("Test RMSE (SYP, lower is better)")
     ax.set_title(f"Next-day closing price: {stem.replace('_', ' ')}")

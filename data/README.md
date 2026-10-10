@@ -1,6 +1,6 @@
 # Data
 
-Daily trading data for 27 companies listed on the Damascus Securities Exchange, January 2010 to September 2024: banks, insurers, telecoms (Syriatel, MTN), industry and services.
+Daily trading data for 28 companies listed on the Damascus Securities Exchange, January 2010 to September 2024: banks, insurers, telecoms (Syriatel, MTN), industry and services.
 
 Each file is semicolon-separated:
 

@@ -1,0 +1,28 @@
+company,trading_days,naive_rmse,best_model,best_rmse,improvement_pct
+Agricultural Engineering Co For Investments - Nama_a,3018,0.0,Random Forest,0.029,
+Ahli Trust Bank ATB,3018,173.707,Random Forest,168.943,2.7
+Al Badia Cement (JSC),1127,274.531,SVR,265.471,3.3
+Al Baraka Bank - Syria,2212,249.156,Random Forest,243.454,2.3
+Al-Aqeelah Takaful Insurance,2907,65.029,Random Forest,63.417,2.5
+Alahliah Vegetable Oil Company,3018,281.432,CatBoost,263.495,6.4
+Alahliah.Co For Transport,3018,295.159,SVR,294.356,0.3
+Arab Bank-Syria,3018,86.813,Random Forest,83.861,3.4
+Bank Alsharq,2854,472.717,CatBoost,470.866,0.4
+Bank Of Jordan Syria,2943,300.804,SVR,291.232,3.2
+Bank of Syria and Overseas,3018,47.627,Random Forest,46.546,2.3
+Banque Bemo Saudi Fransi,3018,146.922,Random Forest,144.585,1.6
+Byblos Bank Syria,3018,41.227,Random Forest,38.472,6.7
+Cham Bank,2285,109.458,CatBoost,102.548,6.3
+Fransabank Syria,2836,53.385,Random Forest,50.853,4.7
+MTN Syria (SA),1278,41.718,SVR,41.626,0.2
+National Insurance Company,2949,73.751,Random Forest,69.657,5.6
+Qatar National Bank- Syria,2972,214.655,CatBoost,211.29,1.6
+Solidarity Alliance Insurance,2702,3.785,XGBoost,3.785,0.0
+Syria Gulf Bank,2919,79.258,Random Forest,80.484,-1.5
+Syria International Insurance- Arope,2974,80.065,Random Forest,78.912,1.4
+Syria International Islamic Bank,3018,60.716,SVR,57.757,4.9
+Syrian Kuwaiti Insurance Company,2586,72.874,Random Forest,70.114,3.8
+Syriatel Mobile Telecom S.A,1306,592.652,Random Forest,543.767,8.2
+The International Bank For Trade & Finance,3018,89.323,Random Forest,89.829,-0.6
+United Group For Publishing Advertising and Marketing,3018,1.202,CatBoost,1.223,-1.8
+United Insurance Company,3018,223.232,SVR,224.208,-0.4
